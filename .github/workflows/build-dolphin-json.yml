@@ -1,6 +1,16 @@
 {
  "name": "Build Dolphin Android (debug)",
- "on": "workflow_dispatch",
+ "on": {
+  "workflow_dispatch": {},
+  "push": {
+   "branches": [
+    "master"
+   ],
+   "paths": [
+    ".github/workflows/build-dolphin-json.yml"
+   ]
+  }
+ },
  "jobs": {
   "build": {
    "runs-on": "ubuntu-24.04",

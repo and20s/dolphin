@@ -4,8 +4,7 @@ name: Build Dolphin Android (debug)
 # Run it from Actions > "Build Dolphin Android (debug)" > Run workflow.
 # The APK is in the artifact "dolphin-debug-apk" on the run summary page.
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
   build:

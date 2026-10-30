@@ -1,1 +1,81 @@
+name: Build Dolphin Android (debug)
 
+# Debug APK of Dolphin (arm64 only) for the HotD 2&3 Return project.
+# Run it from Actions > "Build Dolphin Android (debug)" > Run workflow.
+# The APK is in the artifact "dolphin-debug-apk" on the run summary page.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android/sdk/ndk/25* /usr/local/share/boost || true
+          df -h /
+
+      - name: Checkout (without submodules)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch submodules (skip Windows-only Qt and FFmpeg)
+        run: |
+          git config --file .gitmodules --get-regexp '\.path$' | awk '{print $2}' \
+            | grep -v -e '^Externals/Qt$' -e '^Externals/FFmpeg-bin$' > submodules.txt
+          cat submodules.txt
+          xargs -a submodules.txt git submodule update --init --depth 1 --recursive
+
+      - name: Build arm64 only
+        run: |
+          python3 - <<'PY'
+          p = 'Source/Android/app/build.gradle.kts'
+          s = open(p, encoding='utf-8', newline='').read()
+          old = 'abiFilters += listOf("arm64-v8a", "x86_64")'
+          assert s.count(old) == 1, 'abiFilters line not found exactly once'
+          open(p, 'w', encoding='utf-8', newline='').write(s.replace(old, 'abiFilters += listOf("arm64-v8a")'))
+          print('arm64 only')
+          PY
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.31.6" "ndk;30.0.15729638"
+
+      - name: Build debug APK
+        working-directory: Source/Android
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew --no-daemon assembleDebug --stacktrace 2>&1 | tee ../../gradle-build.log
+        env:
+          ORG_GRADLE_PROJECT_android.native.buildOutput: verbose
+
+      - name: Summary of errors
+        if: failure()
+        run: |
+          grep -n -B2 -A12 "What went wrong" gradle-build.log | head -60 || true
+          grep -n "FAILED:\|error:" gradle-build.log | head -40 || true
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dolphin-debug-apk
+          path: Source/Android/app/build/outputs/apk/debug/*.apk
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: gradle-build.log

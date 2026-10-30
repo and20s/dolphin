@@ -26,6 +26,10 @@
      "run": "python3 - <<'PY'\np = 'Source/Android/app/build.gradle.kts'\ns = open(p, encoding='utf-8', newline='').read()\nold = 'abiFilters += listOf(\"arm64-v8a\", \"x86_64\")'\nassert s.count(old) == 1, 'abiFilters line not found exactly once'\nopen(p, 'w', encoding='utf-8', newline='').write(s.replace(old, 'abiFilters += listOf(\"arm64-v8a\")'))\nprint('arm64 only')\nPY\n"
     },
     {
+     "name": "HotD tweak - Z button reloads",
+     "run": "python3 - <<'PY'\nimport re\np = 'Source/Android/app/src/main/java/org/dolphinemu/dolphinemu/overlay/InputOverlay.kt'\ns = open(p, encoding='utf-8', newline='').read()\n\n# 1) helper: while the on-screen Nunchuk Z button is held, push the IR pointer off the top of\n#    the screen (this is the reload gesture of House of the Dead 2&3 Return); restore on release.\nanchor = '    fun initTouchPointer() {'\nassert s.count(anchor) == 1, 'initTouchPointer anchor'\nhelper = '''    private fun applyReloadHide(control: Int, down: Boolean) {\n        if (control != ControlId.NUNCHUK_Z_BUTTON)\n            return\n        val y = if (down) 1.6 else -(overlayPointer?.y?.toDouble() ?: 0.0)\n        InputOverrider.setControlState(controllerIndex, ControlId.WIIMOTE_IR_Y, y)\n    }\n\n'''\ns = s.replace(anchor, helper + anchor)\n\n# 2) call it after the button state is applied (touch down and touch up)\nline = re.compile(r'^([ \\t]*)InputOverrider\\.setControlState\\(controllerIndex, button\\.control, if \\(button\\.getPressedState\\(\\)\\) 1\\.0 else 0\\.0\\)[ \\t]*$', re.M)\ns, n = line.subn(lambda m: m.group(0) + '\\n' + m.group(1) + 'applyReloadHide(button.control, button.getPressedState())', s)\nassert n == 2, 'expected 2 button state lines, got %d' % n\nopen(p, 'w', encoding='utf-8', newline='').write(s)\nprint('reload tweak applied')\nPY\n"
+    },
+    {
      "name": "Set up JDK 17",
      "uses": "actions/setup-java@v4",
      "with": {
